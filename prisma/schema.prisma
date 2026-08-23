@@ -1,13 +1,32 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// This is your Prisma schema file
 
 generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
+}
+
+// Tabelle für deine Geraete
+model Device {
+  id         String      @id @default(uuid())
+  name       String      
+  ipAddress  String      @unique // z.B. "192.168.178.50"
+  type       String      @default("tapo_p110")
+  createdAt  DateTime    @default(now())
+  
+  // Verbindung zu den gesammelten Stromdaten
+  energyLogs EnergyLog[]
+}
+
+// Tabelle für die aeltere Stromwerte 
+model EnergyLog {
+  id        String   @id @default(uuid())
+  powerW    Float    // Watt
+  timestamp DateTime @default(now())
+  
+  // Verknüpfung der Geraete
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 }
