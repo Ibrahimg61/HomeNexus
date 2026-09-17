@@ -52,3 +52,21 @@ next-env.d.ts
 
 .copilotignore
 .aiexclude
+
+# Local AI/editor tooling
+/.claude/
+/.agents/
+/.windsurf/
+
+# Local Python environment
+/.venv/
+
+# SQLite runtime files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Local environment files
+.env*
+!.env.example
