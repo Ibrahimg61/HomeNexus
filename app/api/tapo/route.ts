@@ -1,25 +1,44 @@
 import { NextResponse } from 'next/server';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import util from 'util';
 import Database from 'better-sqlite3';
 import crypto from 'crypto';
+import { hasValidApiKey } from '@/app/lib/auth';
 
 export const runtime = 'nodejs';
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 
-export async function GET() {
+async function getTapoPasswordFromKeychain() {
+  if (process.env.TAPO_PASSWORD) {
+    return process.env.TAPO_PASSWORD;
+  }
+
+  try {
+    const { stdout } = await execFilePromise('security', ['find-generic-password', '-s', 'Tplinkcloud', '-w']);
+    return stdout.trim(); // Entfernt eventuelle Zeilenumbrüche am Ende
+  } catch (error) {
+    console.error("Fehler beim Lesen aus dem Schlüsselbund:", error);
+    return null;
+  }
+}
+
+export async function POST(request: Request) {
+  if (!hasValidApiKey(request)) {
+    return NextResponse.json({ success: false, error: 'Nicht autorisiert' }, { status: 401 });
+  }
+
   try {
     const tapoEmail = process.env.TAPO_EMAIL;
-    const tapoPassword = process.env.TAPO_PASSWORD;
+
+    const tapoPassword = await getTapoPasswordFromKeychain();
 
     if (!tapoEmail || !tapoPassword) {
-      return NextResponse.json({ success: false, error: "Zugangsdaten fehlen in .env" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Zugangsdaten fehlen oder Schlüsselbund blockiert" }, { status: 400 });
     }
 
-    const db = new Database('./prisma/dev.db');
-
-    const devices = db.prepare("SELECT * FROM Device WHERE type = 'tapo_p110'").all() as any[];
-
+    // Ab hier bleibt dein bisheriger Code exakt gleich!
+    const db = new Database(process.env.DATABASE_PATH ?? './prisma/dev.db');
+    const devices = db.prepare("SELECT id, name, ipAddress FROM Device WHERE type = 'tapo_p110'").all() as { id: string; name: string; ipAddress: string }[];
     if (devices.length === 0) {
       db.close();
       return NextResponse.json({ success: false, message: "Keine Tapo-Geräte in der Datenbank gefunden." });
@@ -29,13 +48,19 @@ export async function GET() {
 
     for (const device of devices) {
       try {
-        const command = `.venv/bin/python scripts/get_tapo.py "${device.ipAddress}" "${tapoEmail}" "${tapoPassword}"`;
-        const { stdout } = await execPromise(command);
+        const { stdout } = await execFilePromise(
+          '.venv/bin/python',
+          ['scripts/get_tapo.py', device.ipAddress, tapoEmail],
+          {
+            env: { ...process.env, TAPO_PASSWORD: tapoPassword },
+            maxBuffer: 1024 * 1024
+          }
+        );
 
-        const result = JSON.parse(stdout);
+        const result = JSON.parse(stdout) as { success: boolean; power_watts?: number; error?: string };
 
         if (!result.success) {
-          throw new Error(result.error);
+          throw new Error(result.error ?? 'Tapo-Abfrage fehlgeschlagen');
         }
 
         const insertStmt = db.prepare(`
@@ -52,8 +77,9 @@ export async function GET() {
           status: "Erfolgreich"
         });
 
-      } catch (deviceError: any) {
-        console.error(`Fehler bei Gerät ${device.name}:`, deviceError.message || deviceError);
+      } catch (deviceError) {
+        const message = deviceError instanceof Error ? deviceError.message : 'Unbekannter Gerätefehler';
+        console.error(`Fehler bei Gerät ${device.name}:`, message);
         results.push({
           deviceName: device.name,
           status: "Fehlgeschlagen"
@@ -69,8 +95,9 @@ export async function GET() {
       data: results
     });
 
-  } catch (error: any) {
-    console.error("Allgemeiner Fehler im API-Loop:", error.message || error);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+    console.error("Allgemeiner Fehler im API-Loop:", message);
     return NextResponse.json({ success: false, error: "Abfrage fehlgeschlagen" }, { status: 500 });
   }
 }

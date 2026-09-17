@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 import json
 from tapo import ApiClient
@@ -7,7 +8,7 @@ async def main():
     try:
         ip = sys.argv[1]
         email = sys.argv[2]
-        password = sys.argv[3]
+        password = os.environ["TAPO_PASSWORD"]
 
         # Verbindung zur herstellen (KLAP)
         client = ApiClient(email, password)
