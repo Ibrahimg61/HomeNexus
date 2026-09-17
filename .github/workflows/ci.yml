@@ -1,0 +1,36 @@
+name: HomeNexus CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Node.js 20 einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Code-Qualität prüfen (Lint)
+        run: npm run lint
+
+      - name: Sicherheitsprüfung (Audit)
+        run: npm audit --audit-level=high || true
+
+      - name: Prisma Client generieren
+        run: npx prisma generate
+
+      - name: Produktions-Build testen
+        run: npm run build
