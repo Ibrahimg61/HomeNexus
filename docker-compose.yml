@@ -1,0 +1,33 @@
+services:
+  homenexus:
+    build: .
+    container_name: homenexus_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./db-data:/app/db-data
+    env_file:
+      - .env
+    environment:
+      DATABASE_PATH: /app/db-data/homenexus.db
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  poller:
+    build: .
+    container_name: homenexus_poller
+    restart: unless-stopped
+    depends_on:
+      homenexus:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      TAPO_API_URL: http://homenexus:3000/api/tapo
+      POLL_INTERVAL_MS: 300000
+    command: ["node", "scripts/poll_tapo.mjs"]

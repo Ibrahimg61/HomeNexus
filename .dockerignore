@@ -1,0 +1,15 @@
+node_modules
+.next
+.venv
+.git
+.env
+.env.*
+db-data
+*.db
+*.db-*
+.claude
+.agents
+.windsurf
+.aiexclude
+.copilotignore
+npm-debug.log*

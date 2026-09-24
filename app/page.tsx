@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 type EnergyLog = { powerW: number; timestamp: string; deviceName: string };
+type Device = { id: string; name: string; ipAddress: string; type: string };
 type RangePreset = '24h' | '7d' | '30d' | 'custom';
 const chartColors = ['#0f766e', '#e07a5f', '#2563eb', '#ca8a04', '#7c3aed', '#be123c'];
 
@@ -27,6 +28,15 @@ export default function Dashboard() {
   const [to, setTo] = useState(defaultRange.to);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showDeviceForm, setShowDeviceForm] = useState(false);
+  const [deviceName, setDeviceName] = useState('');
+  const [deviceIp, setDeviceIp] = useState('');
+  const [deviceMessage, setDeviceMessage] = useState('');
+  const [savedDevices, setSavedDevices] = useState<Device[]>([]);
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [editingIp, setEditingIp] = useState('');
+  const [deviceListMessage, setDeviceListMessage] = useState('');
 
   useEffect(() => {
     const fromDate = new Date(`${from}T00:00:00`);
@@ -41,6 +51,16 @@ export default function Dashboard() {
       .catch(() => setError('Die Messwerte konnten nicht geladen werden.'))
       .finally(() => setLoading(false));
   }, [from, to]);
+
+  useEffect(() => {
+    fetch('/api/devices')
+      .then(res => res.json())
+      .then(json => {
+        if (!json.success) throw new Error('Geräte konnten nicht geladen werden.');
+        setSavedDevices(json.devices);
+      })
+      .catch(() => setDeviceListMessage('Geräte konnten nicht geladen werden.'));
+  }, []);
 
   const devices = useMemo(() => [...new Set(logs.map(log => log.deviceName))], [logs]);
   const chartData = useMemo(() => {
@@ -66,6 +86,53 @@ export default function Dashboard() {
     setPreset(nextPreset);
     setFrom(range.from);
     setTo(range.to);
+  }
+
+  async function addDevice(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDeviceMessage('Gerät wird gespeichert ...');
+    try {
+      const response = await fetch('/api/devices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: deviceName, ipAddress: deviceIp }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? 'Gerät konnte nicht gespeichert werden.');
+      setDeviceMessage('Gerät gespeichert. Der erste Messwert kommt beim nächsten Polling.');
+      setDeviceName('');
+      setDeviceIp('');
+      const devicesResponse = await fetch('/api/devices');
+      const devicesResult = await devicesResponse.json();
+      if (devicesResult.success) setSavedDevices(devicesResult.devices);
+    } catch (addError) {
+      setDeviceMessage(addError instanceof Error ? addError.message : 'Gerät konnte nicht gespeichert werden.');
+    }
+  }
+
+  function startEditing(device: Device) {
+    setEditingDeviceId(device.id);
+    setEditingName(device.name);
+    setEditingIp(device.ipAddress);
+    setDeviceListMessage('');
+  }
+
+  async function saveDevice(deviceId: string) {
+    setDeviceListMessage('Gerät wird aktualisiert ...');
+    try {
+      const response = await fetch('/api/devices', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deviceId, name: editingName, ipAddress: editingIp }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? 'Gerät konnte nicht aktualisiert werden.');
+      setSavedDevices(current => current.map(device => device.id === deviceId ? result.device : device));
+      setEditingDeviceId(null);
+      setDeviceListMessage('Gerät aktualisiert.');
+    } catch (saveError) {
+      setDeviceListMessage(saveError instanceof Error ? saveError.message : 'Gerät konnte nicht aktualisiert werden.');
+    }
   }
 
   return (
@@ -99,7 +166,14 @@ export default function Dashboard() {
             {loading ? <div className="empty-state">Messwerte werden geladen ...</div> : error ? <div className="empty-state error-text">{error}</div> : chartData.length === 0 ? <div className="empty-state">Für diesen Zeitraum sind noch keine Messwerte vorhanden.</div> : <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData} margin={{ top: 12, right: 12, left: -12, bottom: 4 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#dce5e2" /><XAxis dataKey="label" stroke="#71817d" fontSize={11} tickLine={false} axisLine={false} minTickGap={28} /><YAxis stroke="#71817d" fontSize={11} tickLine={false} axisLine={false} unit=" W" /><Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #dce5e2', boxShadow: '0 12px 30px rgba(29, 58, 52, .12)' }} /><Legend iconType="circle" wrapperStyle={{ paddingTop: '18px', fontSize: '12px' }} />{devices.map((device, index) => <Line key={device} type="monotone" dataKey={device} stroke={chartColors[index % chartColors.length]} strokeWidth={2.5} dot={false} connectNulls />)}</LineChart></ResponsiveContainer>}
           </div>
         </section>
+
+        <section className="devices-panel">
+          <div className="panel-heading"><div><p className="eyebrow">VERWALTUNG</p><h2>Meine Geräte</h2></div><div className="devices-panel-actions"><span className="period-label">{savedDevices.length} gespeichert</span><button className="add-device-button" onClick={() => { setShowDeviceForm(true); setDeviceMessage(''); }}>+ Gerät hinzufügen</button></div></div>
+          {deviceListMessage && <p className="device-list-message">{deviceListMessage}</p>}
+          {savedDevices.length === 0 ? <div className="devices-empty">Noch keine Geräte gespeichert. Füge oben deine erste Tapo-Steckdose hinzu.</div> : <div className="device-list">{savedDevices.map(device => <article className="device-row" key={device.id}>{editingDeviceId === device.id ? <><label>Name<input value={editingName} onChange={event => setEditingName(event.target.value)} maxLength={80} /></label><label>IP-Adresse<input value={editingIp} onChange={event => setEditingIp(event.target.value)} inputMode="decimal" /></label><div className="device-row-actions"><button className="device-save" onClick={() => saveDevice(device.id)}>Speichern</button><button className="device-cancel" onClick={() => setEditingDeviceId(null)}>Abbrechen</button></div></> : <><div className="device-identity"><span className="device-dot" /><div><strong>{device.name}</strong><small>{device.ipAddress} · Tapo P110</small></div></div><button className="device-edit" onClick={() => startEditing(device)}>Bearbeiten</button></>}</article>)}</div>}
+        </section>
       </div>
+      {showDeviceForm && <div className="modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) setShowDeviceForm(false); }}><section className="device-modal" role="dialog" aria-modal="true" aria-labelledby="device-dialog-title"><div className="modal-heading"><div><p className="eyebrow">NEUES GERÄT</p><h2 id="device-dialog-title">Tapo-Steckdose hinzufügen</h2></div><button className="close-button" aria-label="Dialog schließen" onClick={() => setShowDeviceForm(false)}>×</button></div><form onSubmit={addDevice}><label>Gerätename<input value={deviceName} onChange={event => setDeviceName(event.target.value)} placeholder="z. B. Wohnzimmer" required maxLength={80} /></label><label>IPv4-Adresse<input value={deviceIp} onChange={event => setDeviceIp(event.target.value)} placeholder="z. B. 192.168.178.50" required inputMode="decimal" /></label>{deviceMessage && <p className="device-message">{deviceMessage}</p>}<button className="save-device-button" type="submit">Gerät speichern</button></form></section></div>}
     </main>
   );
 }

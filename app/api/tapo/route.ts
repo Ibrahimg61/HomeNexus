@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { execFile } from 'child_process';
 import util from 'util';
-import Database from 'better-sqlite3';
 import crypto from 'crypto';
 import { hasValidApiKey } from '@/app/lib/auth';
+import { getDatabasePath } from '@/app/lib/database';
 
 export const runtime = 'nodejs';
 const execFilePromise = util.promisify(execFile);
@@ -37,10 +37,13 @@ export async function POST(request: Request) {
     }
 
     // Ab hier bleibt dein bisheriger Code exakt gleich!
-    const db = new Database(process.env.DATABASE_PATH ?? './prisma/dev.db');
-    const devices = db.prepare("SELECT id, name, ipAddress FROM Device WHERE type = 'tapo_p110'").all() as { id: string; name: string; ipAddress: string }[];
+    const { stdout: devicesOutput } = await execFilePromise('.venv/bin/python', [
+      'scripts/database.py',
+      getDatabasePath(),
+      'devices',
+    ]);
+    const devices = JSON.parse(devicesOutput) as { id: string; name: string; ipAddress: string }[];
     if (devices.length === 0) {
-      db.close();
       return NextResponse.json({ success: false, message: "Keine Tapo-Geräte in der Datenbank gefunden." });
     }
 
@@ -63,12 +66,15 @@ export async function POST(request: Request) {
           throw new Error(result.error ?? 'Tapo-Abfrage fehlgeschlagen');
         }
 
-        const insertStmt = db.prepare(`
-          INSERT INTO EnergyLog (id, deviceId, powerW, timestamp)
-          VALUES (?, ?, ?, ?)
-        `);
-        
-        insertStmt.run(crypto.randomUUID(), device.id, result.power_watts, new Date().toISOString());
+        await execFilePromise('.venv/bin/python', [
+          'scripts/database.py',
+          getDatabasePath(),
+          'insert',
+          crypto.randomUUID(),
+          device.id,
+          String(result.power_watts),
+          new Date().toISOString(),
+        ]);
 
         results.push({
           deviceName: device.name,
@@ -86,8 +92,6 @@ export async function POST(request: Request) {
         });
       }
     }
-
-    db.close();
 
     return NextResponse.json({
       success: true,

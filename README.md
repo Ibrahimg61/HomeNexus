@@ -49,7 +49,9 @@ HomeNexus is a local smart-home energy dashboard for TP-Link Tapo P110 plugs. It
    ```env
    TAPO_EMAIL="your-tapo-account@example.com"
    DATABASE_URL="file:./prisma/dev.db"
+   TAPO_PASSWORD="your-tapo-password"
    HOMENEXUS_API_KEY="replace-with-a-long-random-value"
+   DATABASE_PATH="/app/db-data/homenexus.db"
    ```
 
    On macOS, the Tapo password is read from the Keychain entry `Tplinkcloud`. On Linux/Raspberry Pi, add `TAPO_PASSWORD` to a protected systemd environment file instead of committing it.
@@ -120,13 +122,22 @@ The dashboard converts the returned `powerW`, `timestamp`, and `deviceName` fiel
 
 ## Automatic polling
 
-The application does not run a background worker. Use an external scheduler to call `/api/tapo`, for example a five-minute cron entry on the same machine as the development or production server:
+With Docker Compose, the `poller` service calls `/api/tapo` every five minutes automatically. It uses the same `.env` as the web service and does not expose an additional port:
+
+```bash
+docker compose up -d --build
+docker compose logs -f poller
+```
+
+For a non-Docker installation, use an external scheduler to call `/api/tapo`, for example a five-minute cron entry on the same machine as the production server:
 
 ```cron
 */5 * * * * . /etc/homenexus/homenexus.env && curl --fail --silent -X POST -H "Authorization: Bearer $HOMENEXUS_API_KEY" http://127.0.0.1:3000/api/tapo > /dev/null
 ```
 
 Adjust the URL and interval for the environment where HomeNexus is running.
+
+The Docker setup stores the SQLite database in `./db-data/homenexus.db` on the host through the `/app/db-data` volume. The `.env` file must contain `TAPO_PASSWORD` and `HOMENEXUS_API_KEY`; the macOS Keychain is not available inside the Linux container.
 
 ## Data model
 

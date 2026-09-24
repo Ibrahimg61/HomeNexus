@@ -29,8 +29,5 @@ jobs:
       - name: Sicherheitsprüfung (Audit)
         run: npm audit --audit-level=high || true
 
-      - name: Prisma Client generieren
-        run: npx prisma generate
-
       - name: Produktions-Build testen
         run: npm run build
