@@ -1,176 +1,197 @@
-# HomeNexus
+# HomeNexus (G-Home)
 
-HomeNexus is a local smart-home energy dashboard for TP-Link Tapo P110 plugs. It polls the configured plugs, stores their current power draw in SQLite, and displays the collected readings as a time-series chart.
+HomeNexus is a local smart-home energy dashboard for TP-Link Tapo P110 smart plugs. It polls your plugs every few minutes, stores the current power draw in SQLite, and shows the history as a chart. It runs on a Mac or Linux machine and is tuned for a Raspberry Pi with a 7" touch display.
 
 ## Features
 
-- Next.js dashboard with a Recharts line chart
-- Tapo P110 polling through the Python `tapo` library
-- SQLite persistence through Prisma's schema and `better-sqlite3`
-- Historical readings grouped by device name and timestamp
-- Protected JSON endpoint for polling devices
-- Date-filtered history endpoint for the dashboard
+- **Energy dashboard** with a line chart per device, key figures (current, average, peak, active devices) and quick ranges (24 h, 7 days, 30 days) or a custom date range
+- **Device management in the UI**: add and rename plugs without touching the database
+- **Light, dark and system theme**, switchable with the gear button in the top right corner and remembered per browser
+- **Small-display layout**: compact landscape view for 800×480, 44 px touch targets, no heavy shadows or animations, and a chart limited to 240 points so long ranges stay smooth on a Pi
+- **Automatic polling** every five minutes through a small poller container
+- **Protected polling endpoint**, read-only history endpoint, credentials only from the environment
+- **Docker Compose setup** with a persistent database volume and a health check
+
+## Architecture
+
+```text
+┌──────────┐  POST /api/tapo (Bearer key)  ┌─────────────────────┐   Tapo API    ┌────────────┐
+│  poller  │ ────────────────────────────▶ │  Next.js app        │ ────────────▶ │ Tapo P110  │
+│ (Node)   │        every 5 minutes        │  (dashboard + API)  │  get_tapo.py  │ plugs (LAN)│
+└──────────┘                               └──────────┬──────────┘               └────────────┘
+                                                      │ database.py
+                                                      ▼
+                                              SQLite (db-data/)
+```
+
+The Next.js API routes call two small Python scripts: `scripts/get_tapo.py` reads a plug through the `tapo` library, and `scripts/database.py` reads and writes the SQLite file. Prisma is only used to define the schema and create the tables (`prisma db push`).
 
 ## Stack
 
-- Next.js 16 and React 19
-- TypeScript
-- Prisma 7 with SQLite
-- `better-sqlite3`
+- Next.js 16, React 19, TypeScript
+- Tailwind CSS 4 (plus hand-written CSS with theme variables) and Recharts
+- SQLite, schema managed with Prisma 7
 - Python 3 with the `tapo` package
-- Tailwind CSS 4 and Recharts
+- Docker and Docker Compose, GitHub Actions for CI
 
-## Prerequisites
+## Quick start with Docker (recommended)
 
-- Node.js 20 or newer
-- npm
-- Python 3.9 or newer
-- Network access to the Tapo P110 devices
-- Tapo account credentials that can access those devices
+Requirements: Docker with Compose, and network access from the host to the plugs.
 
-## Setup
-
-1. Install the Node dependencies:
+1. Create your environment file. Never commit `.env`:
 
    ```bash
-   npm install
+   cp .env.example .env
+   openssl rand -hex 32   # use the output as HOMENEXUS_API_KEY
    ```
-
-2. Create a Python virtual environment and install the Tapo client:
-
-   ```bash
-   python3 -m venv .venv
-   .venv/bin/python -m pip install --upgrade pip
-   .venv/bin/pip install tapo
-   ```
-
-3. Create `.env` in the project root. Do not commit it. Generate a long random API key, for example with `openssl rand -hex 32`:
 
    ```env
    TAPO_EMAIL="your-tapo-account@example.com"
-   DATABASE_URL="file:./prisma/dev.db"
    TAPO_PASSWORD="your-tapo-password"
-   HOMENEXUS_API_KEY="replace-with-a-long-random-value"
+   HOMENEXUS_API_KEY="long-random-value"
+   DATABASE_URL="file:/app/db-data/homenexus.db"
    DATABASE_PATH="/app/db-data/homenexus.db"
    ```
 
-   On macOS, the Tapo password is read from the Keychain entry `Tplinkcloud`. On Linux/Raspberry Pi, add `TAPO_PASSWORD` to a protected systemd environment file instead of committing it.
-
-4. Create the local SQLite database from the Prisma schema and generate the client:
+2. Create the database tables once. The container does not create them itself. Run this on the host, with the path pointing to the mounted folder:
 
    ```bash
-   npx prisma db push
-   npx prisma generate
+   npm install
+   DATABASE_URL="file:./db-data/homenexus.db" npx prisma db push
    ```
 
-5. Add at least one device. The simplest option is Prisma Studio:
+3. Start everything:
 
    ```bash
-   npx prisma studio
+   docker compose up -d --build
    ```
 
-   Create a `Device` record with:
+4. Open [http://localhost:3000](http://localhost:3000) (or the Pi's address in your LAN) and add your first plug with **+ Gerät hinzufügen**. The first reading appears after the next polling run.
 
-   - `name`: the label shown in the dashboard, for example `Tapo-Raspberry`
-   - `ipAddress`: the plug's local IP address
-   - `type`: `tapo_p110` (the default)
-
-## Run locally
-
-Start the development server:
+### Update after code changes
 
 ```bash
+git pull                        # on the Pi
+docker compose up -d --build    # rebuilds the image and recreates both containers
+docker compose ps               # homenexus should be "healthy"
+docker compose logs -f poller   # watch the polling
+```
+
+The database lives in `./db-data`, outside the image, so a rebuild keeps all readings. Do not run `docker compose down -v` unless you want to lose them. Reload the browser with a hard refresh (Ctrl/Cmd+Shift+R) after an update.
+
+## Local development
+
+Requirements: Node.js 20+, npm, Python 3.9+.
+
+```bash
+npm install
+python3 -m venv .venv
+.venv/bin/pip install --upgrade pip tapo
+```
+
+Use these values in `.env` for a local run (the paths in `.env.example` are for the container):
+
+```env
+DATABASE_URL="file:./prisma/dev.db"
+DATABASE_PATH="./prisma/dev.db"
+```
+
+Then create the tables and start the dev server:
+
+```bash
+npx prisma db push
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The dashboard loads its chart data from `/api/history`.
+On macOS the Tapo password is read from the Keychain entry `Tplinkcloud` if `TAPO_PASSWORD` is not set. Inside Docker there is no Keychain, so `TAPO_PASSWORD` is required there.
 
 Useful commands:
 
 ```bash
-npm run lint       # Run ESLint
-npm run build      # Create a production build
-npm run start      # Serve the production build
-npx prisma studio  # Inspect devices and energy logs
+npm run lint       # ESLint
+npm run build      # production build
+npm run start      # serve the production build
+npx prisma studio  # inspect devices and energy logs
 ```
+
+## Dashboard usage
+
+- **Time range**: pick 24 h, 7 days or 30 days, or set exact dates.
+- **Devices**: the "Meine Geräte" panel lists your plugs. Use **+ Gerät hinzufügen** to add one (name and IPv4 address) and **Bearbeiten** to rename it or change its IP.
+- **Settings**: the gear button opens the appearance dialog with Hell, Dunkel and System.
+- **Small screens**: on a 7" display the layout switches to a compact single-screen view automatically.
 
 ## API
 
-### `POST /api/tapo`
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/tapo` | Bearer key | Polls all devices and stores one reading per device |
+| `GET` | `/api/history?from=&to=` | none (LAN only) | Readings in ascending time order; `from` and `to` are optional ISO timestamps |
+| `GET` | `/api/devices` | none (LAN only) | Lists all devices |
+| `POST` | `/api/devices` | none (LAN only) | Adds a device: `{ "name", "ipAddress" }` |
+| `PATCH` | `/api/devices` | none (LAN only) | Updates a device: `{ "id", "name", "ipAddress" }` |
 
-Polls every `Device` with type `tapo_p110`, reads its current power usage, and inserts an `EnergyLog` row for successful readings.
-
-```bash
-curl -X POST \
-   -H "Authorization: Bearer $HOMENEXUS_API_KEY" \
-   http://localhost:3000/api/tapo
-```
-
-The endpoint returns `401 Unauthorized` without the configured `HOMENEXUS_API_KEY`. It must not be called with `GET`.
-
-The response includes one result per device. A device failure is reported in that device's result while the other devices continue to be processed.
-
-### `GET /api/history`
-
-Returns energy logs in ascending timestamp order, joined with the device name. The dashboard passes optional ISO timestamps through `from` and `to` query parameters.
+Polling example:
 
 ```bash
-curl http://localhost:3000/api/history
+curl -X POST -H "Authorization: Bearer $HOMENEXUS_API_KEY" http://localhost:3000/api/tapo
 ```
 
-The dashboard converts the returned `powerW`, `timestamp`, and `deviceName` fields into chart series.
+`/api/tapo` returns `401` without the correct key and must not be called with `GET`. The response contains one result per device, and a failing device does not stop the others. Device IPs must be valid IPv4 addresses and are unique.
 
 ## Automatic polling
 
-With Docker Compose, the `poller` service calls `/api/tapo` every five minutes automatically. It uses the same `.env` as the web service and does not expose an additional port:
+With Docker Compose, the `poller` service calls `/api/tapo` every five minutes (`POLL_INTERVAL_MS`, default `300000`) and retries three times on failure. It uses the same `.env` and exposes no port.
 
-```bash
-docker compose up -d --build
-docker compose logs -f poller
-```
-
-For a non-Docker installation, use an external scheduler to call `/api/tapo`, for example a five-minute cron entry on the same machine as the production server:
+Without Docker, use a scheduler on the same machine, for example cron:
 
 ```cron
 */5 * * * * . /etc/homenexus/homenexus.env && curl --fail --silent -X POST -H "Authorization: Bearer $HOMENEXUS_API_KEY" http://127.0.0.1:3000/api/tapo > /dev/null
 ```
 
-Adjust the URL and interval for the environment where HomeNexus is running.
-
-The Docker setup stores the SQLite database in `./db-data/homenexus.db` on the host through the `/app/db-data` volume. The `.env` file must contain `TAPO_PASSWORD` and `HOMENEXUS_API_KEY`; the macOS Keychain is not available inside the Linux container.
-
 ## Data model
 
-`Device` stores the plug name, IP address, type, and creation time. `EnergyLog` stores a wattage reading and timestamp linked to a device. Deleting a device cascades to its energy logs.
+- `Device`: id, name, unique IP address, type (`tapo_p110`), creation time
+- `EnergyLog`: id, power in watts, timestamp, link to a device
 
-The database file defaults to `prisma/dev.db` and is ignored by Git. Set `DATABASE_PATH` to place it on a USB drive, for example `/media/usb/home-nexus/dev.db`. This project currently has no checked-in Prisma migration history; `prisma db push` is the intended local setup command.
+Deleting a device removes its readings. The database path comes from `DATABASE_PATH` (or `DATABASE_URL`) and defaults to `prisma/dev.db`; it can point to a USB drive on the Pi. There is no migration history, `prisma db push` is the intended setup command.
 
 ## Project layout
 
 ```text
-app/page.tsx              Dashboard UI
-app/api/history/route.ts  Historical readings API
-app/api/tapo/route.ts     Tapo polling API
-prisma/schema.prisma      Device and EnergyLog models
-scripts/get_tapo.py       Python Tapo P110 reader
+app/page.tsx                 Dashboard UI (chart, devices, settings dialog)
+app/layout.tsx               Root layout and theme bootstrap
+app/globals.css              Styles, theme variables, small-display rules
+app/lib/theme.ts             Theme state (light, dark, system)
+app/lib/auth.ts              API key check
+app/lib/database.ts          Database path resolution
+app/api/tapo/route.ts        Polling endpoint
+app/api/history/route.ts     History endpoint
+app/api/devices/route.ts     Device management endpoint
+scripts/get_tapo.py          Reads a Tapo P110
+scripts/database.py          SQLite reads and writes
+scripts/poll_tapo.mjs        Poller used by the poller container
+prisma/schema.prisma         Device and EnergyLog models
+docker-compose.yml           App and poller services
+.github/workflows/ci.yml     Lint, audit and build on push and pull requests
 ```
 
 ## Security notes
 
-- Keep `.env` and the systemd environment file private; rotate credentials if they have been exposed.
-- `/api/tapo` requires `Authorization: Bearer $HOMENEXUS_API_KEY` and uses `POST` because it writes to the database.
-- The Tapo password is never embedded in a shell command or process argument. It is passed to the Python script through its process environment.
-- Do not create a router port forwarding rule for port `3000`. On the Pi, allow port `3000` only from the LAN with a firewall.
-- For future remote access, use Tailscale or WireGuard instead of exposing Next.js directly to the internet. If a public domain is required, put a reverse proxy with HTTPS and authentication in front of the app.
-- `/api/history` is read-only but exposes device names, local IP addresses and energy data. Keep it behind the LAN/VPN; add authentication at the reverse proxy before enabling public access.
+- Keep `.env` private and rotate the Tapo password and API key if they were ever exposed. `.env` is git-ignored and excluded from the Docker image.
+- `/api/tapo` needs the API key and uses `POST` because it writes data. The Tapo password reaches the Python script through its environment, never as a command-line argument.
+- `/api/history` and `/api/devices` have no authentication and expose device names, local IPs and energy data. Keep the app inside your LAN.
+- Do not forward port 3000 on your router. On the Pi, allow it only from the LAN with a firewall.
+- For remote access use Tailscale or WireGuard. If a public domain is unavoidable, put a reverse proxy with HTTPS and authentication in front.
 
-## Deployment
+## Continuous integration
 
-HomeNexus assumes a local SQLite file and access to the Tapo devices from the application host. For deployment, ensure the host has Python, the `.venv` dependencies, a protected environment file, persistent storage for the database, and network access to the plugs. Build and start with:
+GitHub Actions runs `npm ci`, `npm run lint`, a high-severity `npm audit` (informational) and `npm run build` on every push and pull request to `main`.
 
-```bash
-npm run build
-npm run start
-```
+## Troubleshooting
 
-To make the app reachable from other devices in the home network, bind Next.js to the LAN interface, for example `npm run start -- --hostname 0.0.0.0`, and restrict access with the Pi firewall. Do not use this as a substitute for authentication.
+- **Empty chart or no readings**: check that at least one device exists and read the poller logs with `docker compose logs poller`.
+- **`Zugangsdaten fehlen`**: `TAPO_EMAIL` or `TAPO_PASSWORD` is missing in `.env`.
+- **`401 Nicht autorisiert`**: the poller and the app must share the same `HOMENEXUS_API_KEY`; recreate both containers after changing `.env`.
+- **Dashboard shows old styles after an update**: hard-refresh the browser.
+- **Plug not reachable**: give the plug a fixed IP in your router and make sure the host is in the same network.
