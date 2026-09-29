@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { setTheme, useTheme, type Theme } from '@/app/lib/theme';
 
 type EnergyLog = { powerW: number; timestamp: string; deviceName: string };
 type Device = { id: string; name: string; ipAddress: string; type: string };
 type RangePreset = '24h' | '7d' | '30d' | 'custom';
 const maxChartPoints = 240;
-const chartColors = ['#0f766e', '#e07a5f', '#2563eb', '#ca8a04', '#7c3aed', '#be123c'];
+const chartColors = [1, 2, 3, 4, 5, 6].map(index => `var(--chart-${index})`);
+const themeOptions: { value: Theme; label: string }[] = [{ value: 'light', label: 'Hell' }, { value: 'dark', label: 'Dunkel' }, { value: 'system', label: 'System' }];
 
 function toDateInputValue(date: Date) {
   const offset = date.getTimezoneOffset() * 60_000;
@@ -29,6 +31,8 @@ export default function Dashboard() {
   const [to, setTo] = useState(defaultRange.to);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const theme = useTheme();
+  const [showSettings, setShowSettings] = useState(false);
   const [showDeviceForm, setShowDeviceForm] = useState(false);
   const [deviceName, setDeviceName] = useState('');
   const [deviceIp, setDeviceIp] = useState('');
@@ -144,8 +148,11 @@ export default function Dashboard() {
     <main className="dashboard-shell">
       <div className="dashboard-container">
         <header className="dashboard-header">
-          <div><p className="eyebrow">HOME NEXUS / ENERGIE</p><h1>Dein Zuhause auf einen Blick.</h1><p className="header-copy">Verfolge den Stromverbrauch deiner Geräte und erkenne Trends sofort.</p></div>
-          <div className="live-status"><span /> Live-Daten</div>
+          <div><p className="eyebrow">HOME NEXUS / ENERGIE</p><h1>G-Home</h1><p className="header-copy">Verfolge den Stromverbrauch deiner Geräte und erkenne Trends sofort.</p></div>
+          <div className="header-actions">
+            <div className="live-status"><span /> Live-Daten</div>
+            <button className="settings-button" aria-label="Einstellungen öffnen" onClick={() => setShowSettings(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg></button>
+          </div>
         </header>
 
         <section className="filter-panel" aria-label="Zeitraum auswählen">
@@ -168,7 +175,7 @@ export default function Dashboard() {
         <section className="chart-panel">
           <div className="panel-heading"><div><p className="eyebrow">VERLAUF</p><h2>Stromverbrauch</h2></div><span className="period-label">{from} bis {to}</span></div>
           <div className="chart-wrap">
-            {loading ? <div className="empty-state">Messwerte werden geladen ...</div> : error ? <div className="empty-state error-text">{error}</div> : chartData.length === 0 ? <div className="empty-state">Für diesen Zeitraum sind noch keine Messwerte vorhanden.</div> : <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData} margin={{ top: 12, right: 12, left: -12, bottom: 4 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#dce5e2" /><XAxis dataKey="label" stroke="#71817d" fontSize={11} tickLine={false} axisLine={false} minTickGap={28} /><YAxis stroke="#71817d" fontSize={11} tickLine={false} axisLine={false} unit=" W" /><Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #dce5e2', boxShadow: '0 12px 30px rgba(29, 58, 52, .12)' }} /><Legend iconType="circle" wrapperStyle={{ paddingTop: '18px', fontSize: '12px' }} />{devices.map((device, index) => <Line key={device} type="monotone" dataKey={device} stroke={chartColors[index % chartColors.length]} strokeWidth={2.5} dot={false} connectNulls isAnimationActive={false} />)}</LineChart></ResponsiveContainer>}
+            {loading ? <div className="empty-state">Messwerte werden geladen ...</div> : error ? <div className="empty-state error-text">{error}</div> : chartData.length === 0 ? <div className="empty-state">Für diesen Zeitraum sind noch keine Messwerte vorhanden.</div> : <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData} margin={{ top: 12, right: 12, left: -12, bottom: 4 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--line)" /><XAxis dataKey="label" stroke="var(--ink-muted)" fontSize={11} tickLine={false} axisLine={false} minTickGap={28} /><YAxis stroke="var(--ink-muted)" fontSize={11} tickLine={false} axisLine={false} unit=" W" /><Tooltip contentStyle={{ background: 'var(--surface)', color: 'var(--foreground)', borderRadius: '12px', border: '1px solid var(--line)', boxShadow: 'var(--shadow-tooltip)' }} /><Legend iconType="circle" wrapperStyle={{ paddingTop: '18px', fontSize: '12px' }} />{devices.map((device, index) => <Line key={device} type="monotone" dataKey={device} stroke={chartColors[index % chartColors.length]} strokeWidth={2.5} dot={false} connectNulls isAnimationActive={false} />)}</LineChart></ResponsiveContainer>}
           </div>
         </section>
 
@@ -178,7 +185,8 @@ export default function Dashboard() {
           {savedDevices.length === 0 ? <div className="devices-empty">Noch keine Geräte gespeichert. Füge oben deine erste Tapo-Steckdose hinzu.</div> : <div className="device-list">{savedDevices.map(device => <article className="device-row" key={device.id}>{editingDeviceId === device.id ? <><label>Name<input value={editingName} onChange={event => setEditingName(event.target.value)} maxLength={80} /></label><label>IP-Adresse<input value={editingIp} onChange={event => setEditingIp(event.target.value)} inputMode="decimal" /></label><div className="device-row-actions"><button className="device-save" onClick={() => saveDevice(device.id)}>Speichern</button><button className="device-cancel" onClick={() => setEditingDeviceId(null)}>Abbrechen</button></div></> : <><div className="device-identity"><span className="device-dot" /><div><strong>{device.name}</strong><small>{device.ipAddress} · Tapo P110</small></div></div><button className="device-edit" onClick={() => startEditing(device)}>Bearbeiten</button></>}</article>)}</div>}
         </section>
       </div>
-      {showDeviceForm && <div className="modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) setShowDeviceForm(false); }}><section className="device-modal" role="dialog" aria-modal="true" aria-labelledby="device-dialog-title"><div className="modal-heading"><div><p className="eyebrow">NEUES GERÄT</p><h2 id="device-dialog-title">Tapo-Steckdose hinzufügen</h2></div><button className="close-button" aria-label="Dialog schließen" onClick={() => setShowDeviceForm(false)}>×</button></div><form onSubmit={addDevice}><label>Gerätename<input value={deviceName} onChange={event => setDeviceName(event.target.value)} placeholder="z. B. Wohnzimmer" required maxLength={80} /></label><label>IPv4-Adresse<input value={deviceIp} onChange={event => setDeviceIp(event.target.value)} placeholder="z. B. 192.168.178.50" required inputMode="decimal" /></label>{deviceMessage && <p className="device-message">{deviceMessage}</p>}<button className="save-device-button" type="submit">Gerät speichern</button></form></section></div>}
+      {showSettings && <div className="modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) setShowSettings(false); }}><section className="device-modal" role="dialog" aria-modal="true" aria-labelledby="settings-dialog-title"><div className="modal-heading"><div><p className="eyebrow">EINSTELLUNGEN</p><h2 id="settings-dialog-title">Darstellung</h2></div><button className="close-button" aria-label="Dialog schließen" onClick={() => setShowSettings(false)}>×</button></div><p className="settings-label">Farbschema</p><div className="preset-group theme-group" role="group" aria-label="Farbschema">{themeOptions.map(option => <button key={option.value} className={theme === option.value ? 'preset active' : 'preset'} aria-pressed={theme === option.value} onClick={() => setTheme(option.value)}>{option.label}</button>)}</div></section></div>}
+      {showDeviceForm &&<div className="modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) setShowDeviceForm(false); }}><section className="device-modal" role="dialog" aria-modal="true" aria-labelledby="device-dialog-title"><div className="modal-heading"><div><p className="eyebrow">NEUES GERÄT</p><h2 id="device-dialog-title">Tapo-Steckdose hinzufügen</h2></div><button className="close-button" aria-label="Dialog schließen" onClick={() => setShowDeviceForm(false)}>×</button></div><form onSubmit={addDevice}><label>Gerätename<input value={deviceName} onChange={event => setDeviceName(event.target.value)} placeholder="z. B. Wohnzimmer" required maxLength={80} /></label><label>IPv4-Adresse<input value={deviceIp} onChange={event => setDeviceIp(event.target.value)} placeholder="z. B. 192.168.178.50" required inputMode="decimal" /></label>{deviceMessage && <p className="device-message">{deviceMessage}</p>}<button className="save-device-button" type="submit">Gerät speichern</button></form></section></div>}
     </main>
   );
 }

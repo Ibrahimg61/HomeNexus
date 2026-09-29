@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { themeStorageKey } from "./lib/theme-constants";
+
+// Setzt das gespeicherte Theme vor dem ersten Rendern, damit es nicht kurz hell aufblitzt.
+const themeScript = `try{var t=localStorage.getItem(${JSON.stringify(themeStorageKey)});document.documentElement.dataset.theme=t==='light'||t==='dark'?t:'system'}catch(e){}`;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,7 +26,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
