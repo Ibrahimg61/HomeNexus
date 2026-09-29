@@ -6,6 +6,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 type EnergyLog = { powerW: number; timestamp: string; deviceName: string };
 type Device = { id: string; name: string; ipAddress: string; type: string };
 type RangePreset = '24h' | '7d' | '30d' | 'custom';
+const maxChartPoints = 240;
 const chartColors = ['#0f766e', '#e07a5f', '#2563eb', '#ca8a04', '#7c3aed', '#be123c'];
 
 function toDateInputValue(date: Date) {
@@ -72,7 +73,11 @@ export default function Dashboard() {
       point[log.deviceName] = log.powerW;
       grouped.set(key, point);
     });
-    return [...grouped.values()];
+    const points = [...grouped.values()];
+    // Kleine Geräte (Raspberry Pi) rendern nicht tausende SVG-Punkte flüssig: gleichmäßig ausdünnen.
+    if (points.length <= maxChartPoints) return points;
+    const step = Math.ceil(points.length / maxChartPoints);
+    return points.filter((_, index) => index % step === 0 || index === points.length - 1);
   }, [logs]);
 
   const averagePower = logs.length ? logs.reduce((sum, log) => sum + log.powerW, 0) / logs.length : 0;
@@ -163,7 +168,7 @@ export default function Dashboard() {
         <section className="chart-panel">
           <div className="panel-heading"><div><p className="eyebrow">VERLAUF</p><h2>Stromverbrauch</h2></div><span className="period-label">{from} bis {to}</span></div>
           <div className="chart-wrap">
-            {loading ? <div className="empty-state">Messwerte werden geladen ...</div> : error ? <div className="empty-state error-text">{error}</div> : chartData.length === 0 ? <div className="empty-state">Für diesen Zeitraum sind noch keine Messwerte vorhanden.</div> : <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData} margin={{ top: 12, right: 12, left: -12, bottom: 4 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#dce5e2" /><XAxis dataKey="label" stroke="#71817d" fontSize={11} tickLine={false} axisLine={false} minTickGap={28} /><YAxis stroke="#71817d" fontSize={11} tickLine={false} axisLine={false} unit=" W" /><Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #dce5e2', boxShadow: '0 12px 30px rgba(29, 58, 52, .12)' }} /><Legend iconType="circle" wrapperStyle={{ paddingTop: '18px', fontSize: '12px' }} />{devices.map((device, index) => <Line key={device} type="monotone" dataKey={device} stroke={chartColors[index % chartColors.length]} strokeWidth={2.5} dot={false} connectNulls />)}</LineChart></ResponsiveContainer>}
+            {loading ? <div className="empty-state">Messwerte werden geladen ...</div> : error ? <div className="empty-state error-text">{error}</div> : chartData.length === 0 ? <div className="empty-state">Für diesen Zeitraum sind noch keine Messwerte vorhanden.</div> : <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData} margin={{ top: 12, right: 12, left: -12, bottom: 4 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#dce5e2" /><XAxis dataKey="label" stroke="#71817d" fontSize={11} tickLine={false} axisLine={false} minTickGap={28} /><YAxis stroke="#71817d" fontSize={11} tickLine={false} axisLine={false} unit=" W" /><Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #dce5e2', boxShadow: '0 12px 30px rgba(29, 58, 52, .12)' }} /><Legend iconType="circle" wrapperStyle={{ paddingTop: '18px', fontSize: '12px' }} />{devices.map((device, index) => <Line key={device} type="monotone" dataKey={device} stroke={chartColors[index % chartColors.length]} strokeWidth={2.5} dot={false} connectNulls isAnimationActive={false} />)}</LineChart></ResponsiveContainer>}
           </div>
         </section>
 

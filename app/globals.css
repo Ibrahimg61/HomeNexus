@@ -88,3 +88,50 @@ h1 { color: #17332e; font-size: clamp(30px, 4vw, 48px); letter-spacing: -.04em; 
 .save-device-button { margin-top: 8px; width: 100%; }
 @media (max-width: 900px) { .filter-panel { align-items: flex-start; } .metric-grid { grid-template-columns: repeat(2, 1fr); } .preset-group { order: 3; width: 100%; } .preset { flex: 1; } }
 @media (max-width: 600px) { .dashboard-shell { padding: 28px 14px 42px; } .dashboard-header { margin-bottom: 24px; } .add-device-button { padding: 8px 10px; } .live-status { padding: 7px 10px; } .filter-panel { gap: 16px; padding: 16px; } .date-fields { width: 100%; } .date-fields label { flex: 1; } .date-fields input { box-sizing: border-box; width: 100%; } .metric-grid { gap: 10px; } .metric-card { min-height: 105px; padding: 15px; } .metric-card strong { font-size: 22px; } .chart-panel, .devices-panel { padding: 20px 12px 12px; } .panel-heading { align-items: flex-start; flex-direction: column; gap: 8px; } .devices-panel-actions { align-items: flex-start; flex-direction: column; gap: 10px; } .chart-wrap { height: 350px; margin-top: 18px; } .device-row { align-items: stretch; flex-direction: column; } .device-row-actions { justify-content: flex-end; } }
+
+/* Touch-Bedienung: Tippflächen mindestens 44px (Raspberry Pi Touchdisplay) */
+button, input, label { -webkit-tap-highlight-color: transparent; }
+button { touch-action: manipulation; }
+@media (pointer: coarse) {
+  .add-device-button, .save-device-button, .preset, .device-edit, .device-save, .device-cancel { min-height: 44px; }
+  .close-button { height: 44px; width: 44px; }
+  .date-fields input, .device-row input, .device-modal input { font-size: 16px; min-height: 44px; }
+}
+
+/* Schwache Hardware / kleine Displays: keine Schatten und Verläufe, keine Animationen */
+@media (max-width: 1024px), (max-height: 560px) {
+  .dashboard-shell { background: var(--background); }
+  .filter-panel, .chart-panel, .devices-panel, .device-modal, .preset.active { box-shadow: none; }
+  .preset { transition: none; }
+}
+
+/* Kleines Querformat, z. B. Raspberry Pi 7" Display (800x480): alles kompakt auf einen Blick */
+@media (max-height: 560px) and (orientation: landscape) {
+  .dashboard-shell { padding: 12px 14px 24px; }
+  .dashboard-header { align-items: center; gap: 12px; margin-bottom: 12px; }
+  .eyebrow { font-size: 10px; margin-bottom: 4px; }
+  h1 { font-size: 22px; margin-bottom: 0; }
+  .header-copy { display: none; }
+  .live-status { padding: 6px 10px; }
+  .filter-panel { align-items: center; border-radius: 12px; gap: 10px 14px; margin-bottom: 12px; padding: 8px 12px; }
+  .filter-heading { display: none; }
+  .preset-group { order: 0; width: auto; }
+  .preset { flex: none; padding: 8px 12px; }
+  .date-fields { width: auto; }
+  .date-fields input { box-sizing: border-box; width: auto; }
+  .date-arrow { margin-top: 0; }
+  .metric-grid { gap: 8px; grid-template-columns: repeat(4, 1fr); margin-bottom: 12px; }
+  .metric-card { border-radius: 10px; min-height: 0; padding: 10px 12px; }
+  .metric-card strong { font-size: 20px; margin: 4px 0 2px; }
+  .metric-label, .metric-card small { font-size: 11px; }
+  .chart-panel, .devices-panel { border-radius: 12px; margin-top: 12px; padding: 14px 14px 8px; }
+  .panel-heading { align-items: flex-end; flex-direction: row; }
+  .panel-heading h2 { font-size: 18px; }
+  .chart-wrap { height: 300px; margin-top: 10px; }
+  .devices-panel-actions { align-items: center; flex-direction: row; }
+  .device-row { align-items: center; flex-direction: row; }
+  .modal-backdrop { align-items: flex-start; overflow-y: auto; padding: 8px; }
+  .device-modal { padding: 14px 18px; }
+  .modal-heading { margin-bottom: 10px; }
+  .device-modal label { margin-bottom: 8px; }
+}
