@@ -8,8 +8,14 @@ type EnergyLog = { powerW: number; timestamp: string; deviceName: string };
 type Device = { id: string; name: string; ipAddress: string; type: string };
 type RangePreset = '24h' | '7d' | '30d' | 'custom';
 const maxChartPoints = 240;
+const apiKeyStorageKey = 'homenexus-api-key';
 const chartColors = [1, 2, 3, 4, 5, 6].map(index => `var(--chart-${index})`);
 const themeOptions: { value: Theme; label: string }[] = [{ value: 'light', label: 'Hell' }, { value: 'dark', label: 'Dunkel' }, { value: 'system', label: 'System' }];
+
+function readStoredApiKey() {
+  if (typeof window === 'undefined') return '';
+  try { return localStorage.getItem(apiKeyStorageKey) ?? ''; } catch { return ''; }
+}
 
 function toDateInputValue(date: Date) {
   const offset = date.getTimezoneOffset() * 60_000;
@@ -42,6 +48,16 @@ export default function Dashboard() {
   const [editingName, setEditingName] = useState('');
   const [editingIp, setEditingIp] = useState('');
   const [deviceListMessage, setDeviceListMessage] = useState('');
+  const [apiKey, setApiKey] = useState(readStoredApiKey);
+
+  function updateApiKey(value: string) {
+    setApiKey(value);
+    try { localStorage.setItem(apiKeyStorageKey, value); } catch {}
+  }
+
+  function authHeaders() {
+    return { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey.trim()}` };
+  }
 
   useEffect(() => {
     const fromDate = new Date(`${from}T00:00:00`);
@@ -103,7 +119,7 @@ export default function Dashboard() {
     try {
       const response = await fetch('/api/devices', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ name: deviceName, ipAddress: deviceIp }),
       });
       const result = await response.json();
@@ -131,7 +147,7 @@ export default function Dashboard() {
     try {
       const response = await fetch('/api/devices', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ id: deviceId, name: editingName, ipAddress: editingIp }),
       });
       const result = await response.json();
@@ -185,7 +201,7 @@ export default function Dashboard() {
           {savedDevices.length === 0 ? <div className="devices-empty">Noch keine Geräte gespeichert. Füge oben deine erste Tapo-Steckdose hinzu.</div> : <div className="device-list">{savedDevices.map(device => <article className="device-row" key={device.id}>{editingDeviceId === device.id ? <><label>Name<input value={editingName} onChange={event => setEditingName(event.target.value)} maxLength={80} /></label><label>IP-Adresse<input value={editingIp} onChange={event => setEditingIp(event.target.value)} inputMode="decimal" /></label><div className="device-row-actions"><button className="device-save" onClick={() => saveDevice(device.id)}>Speichern</button><button className="device-cancel" onClick={() => setEditingDeviceId(null)}>Abbrechen</button></div></> : <><div className="device-identity"><span className="device-dot" /><div><strong>{device.name}</strong><small>{device.ipAddress} · Tapo P110</small></div></div><button className="device-edit" onClick={() => startEditing(device)}>Bearbeiten</button></>}</article>)}</div>}
         </section>
       </div>
-      {showSettings && <div className="modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) setShowSettings(false); }}><section className="device-modal" role="dialog" aria-modal="true" aria-labelledby="settings-dialog-title"><div className="modal-heading"><div><p className="eyebrow">EINSTELLUNGEN</p><h2 id="settings-dialog-title">Darstellung</h2></div><button className="close-button" aria-label="Dialog schließen" onClick={() => setShowSettings(false)}>×</button></div><p className="settings-label">Farbschema</p><div className="preset-group theme-group" role="group" aria-label="Farbschema">{themeOptions.map(option => <button key={option.value} className={theme === option.value ? 'preset active' : 'preset'} aria-pressed={theme === option.value} onClick={() => setTheme(option.value)}>{option.label}</button>)}</div></section></div>}
+      {showSettings && <div className="modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) setShowSettings(false); }}><section className="device-modal" role="dialog" aria-modal="true" aria-labelledby="settings-dialog-title"><div className="modal-heading"><div><p className="eyebrow">EINSTELLUNGEN</p><h2 id="settings-dialog-title">Darstellung</h2></div><button className="close-button" aria-label="Dialog schließen" onClick={() => setShowSettings(false)}>×</button></div><p className="settings-label">Farbschema</p><div className="preset-group theme-group" role="group" aria-label="Farbschema">{themeOptions.map(option => <button key={option.value} className={theme === option.value ? 'preset active' : 'preset'} aria-pressed={theme === option.value} onClick={() => setTheme(option.value)}>{option.label}</button>)}</div><p className="settings-label">API-Key</p><label>Zum Hinzufügen und Bearbeiten von Geräten<input type="password" autoComplete="off" value={apiKey} onChange={event => updateApiKey(event.target.value)} placeholder="HOMENEXUS_API_KEY" /></label><p className="device-message">Wird nur in diesem Browser gespeichert.</p></section></div>}
       {showDeviceForm &&<div className="modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) setShowDeviceForm(false); }}><section className="device-modal" role="dialog" aria-modal="true" aria-labelledby="device-dialog-title"><div className="modal-heading"><div><p className="eyebrow">NEUES GERÄT</p><h2 id="device-dialog-title">Tapo-Steckdose hinzufügen</h2></div><button className="close-button" aria-label="Dialog schließen" onClick={() => setShowDeviceForm(false)}>×</button></div><form onSubmit={addDevice}><label>Gerätename<input value={deviceName} onChange={event => setDeviceName(event.target.value)} placeholder="z. B. Wohnzimmer" required maxLength={80} /></label><label>IPv4-Adresse<input value={deviceIp} onChange={event => setDeviceIp(event.target.value)} placeholder="z. B. 192.168.178.50" required inputMode="decimal" /></label>{deviceMessage && <p className="device-message">{deviceMessage}</p>}<button className="save-device-button" type="submit">Gerät speichern</button></form></section></div>}
     </main>
   );

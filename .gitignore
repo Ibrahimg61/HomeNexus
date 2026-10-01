@@ -70,3 +70,6 @@ next-env.d.ts
 # Local environment files
 .env*
 !.env.example
+# Python
+__pycache__/
+*.pyc

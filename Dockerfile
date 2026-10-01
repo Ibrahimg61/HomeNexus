@@ -26,8 +26,12 @@ COPY . .
 # 7. Next.js App bauen
 RUN npm run build
 
-# 8. Welcher Port soll nach außen geöffnet werden?
+# 8. Als unprivilegierter Benutzer laufen lassen (nicht als root)
+RUN mkdir -p /app/db-data && chown -R node:node /app/.next /app/db-data
+USER node
+
+# 9. Welcher Port soll nach außen geöffnet werden?
 EXPOSE 3000
 
-# 9. Der Befehl, der beim Start des Containers ausgeführt wird
+# 10. Der Befehl, der beim Start des Containers ausgeführt wird
 CMD ["npm", "start"]

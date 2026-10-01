@@ -3,6 +3,7 @@ import { execFile } from 'child_process';
 import crypto from 'crypto';
 import util from 'util';
 import net from 'net';
+import { hasValidApiKey } from '@/app/lib/auth';
 import { getDatabasePath } from '@/app/lib/database';
 
 export const runtime = 'nodejs';
@@ -21,6 +22,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!hasValidApiKey(request)) {
+    return NextResponse.json({ success: false, error: 'API-Key fehlt oder ist falsch. Bitte in den Einstellungen eintragen.' }, { status: 401 });
+  }
+
   try {
     const body = await request.json() as { name?: string; ipAddress?: string };
     const name = body.name?.trim();
@@ -52,6 +57,10 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  if (!hasValidApiKey(request)) {
+    return NextResponse.json({ success: false, error: 'API-Key fehlt oder ist falsch. Bitte in den Einstellungen eintragen.' }, { status: 401 });
+  }
+
   try {
     const body = await request.json() as { id?: string; name?: string; ipAddress?: string };
     const id = body.id?.trim();

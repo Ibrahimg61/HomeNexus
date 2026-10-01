@@ -9,7 +9,7 @@ HomeNexus is a local smart-home energy dashboard for TP-Link Tapo P110 smart plu
 - **Light, dark and system theme**, switchable with the gear button in the top right corner and remembered per browser
 - **Small-display layout**: compact landscape view for 800×480, 44 px touch targets, no heavy shadows or animations, and a chart limited to 240 points so long ranges stay smooth on a Pi
 - **Automatic polling** every five minutes through a small poller container
-- **Protected polling endpoint**, read-only history endpoint, credentials only from the environment
+- **Protected write endpoints** (polling and device changes need the API key), read-only history endpoint, credentials only from the environment
 - **Docker Compose setup** with a persistent database volume and a health check
 
 ## Architecture
@@ -66,7 +66,9 @@ Requirements: Docker with Compose, and network access from the host to the plugs
    docker compose up -d --build
    ```
 
-4. Open [http://localhost:3000](http://localhost:3000) (or the Pi's address in your LAN) and add your first plug with **+ Gerät hinzufügen**. The first reading appears after the next polling run.
+4. Open [http://localhost:3000](http://localhost:3000) (or the Pi's address in your LAN). Click the gear button and enter your `HOMENEXUS_API_KEY` under **API-Key**, then add your first plug with **+ Gerät hinzufügen**. The first reading appears after the next polling run.
+
+The container runs as the unprivileged user `node` (uid 1000). The host folder `./db-data` must be writable for that user; on a Raspberry Pi the default user usually is uid 1000. If SQLite reports `readonly database`, run `sudo chown -R 1000:1000 db-data`.
 
 ### Update after code changes
 
@@ -117,6 +119,7 @@ npx prisma studio  # inspect devices and energy logs
 ## Dashboard usage
 
 - **Time range**: pick 24 h, 7 days or 30 days, or set exact dates.
+- **API key**: adding or editing a plug needs `HOMENEXUS_API_KEY`. Enter it once in the settings dialog (gear button); it is stored only in that browser.
 - **Devices**: the "Meine Geräte" panel lists your plugs. Use **+ Gerät hinzufügen** to add one (name and IPv4 address) and **Bearbeiten** to rename it or change its IP.
 - **Settings**: the gear button opens the appearance dialog with Hell, Dunkel and System.
 - **Small screens**: on a 7" display the layout switches to a compact single-screen view automatically.
@@ -128,8 +131,8 @@ npx prisma studio  # inspect devices and energy logs
 | `POST` | `/api/tapo` | Bearer key | Polls all devices and stores one reading per device |
 | `GET` | `/api/history?from=&to=` | none (LAN only) | Readings in ascending time order; `from` and `to` are optional ISO timestamps |
 | `GET` | `/api/devices` | none (LAN only) | Lists all devices |
-| `POST` | `/api/devices` | none (LAN only) | Adds a device: `{ "name", "ipAddress" }` |
-| `PATCH` | `/api/devices` | none (LAN only) | Updates a device: `{ "id", "name", "ipAddress" }` |
+| `POST` | `/api/devices` | Bearer key | Adds a device: `{ "name", "ipAddress" }` |
+| `PATCH` | `/api/devices` | Bearer key | Updates a device: `{ "id", "name", "ipAddress" }` |
 
 Polling example:
 
@@ -178,20 +181,25 @@ docker-compose.yml           App and poller services
 
 ## Security notes
 
-- Keep `.env` private and rotate the Tapo password and API key if they were ever exposed. `.env` is git-ignored and excluded from the Docker image.
+- Never commit `.env`. It is git-ignored and excluded from the Docker image; only `.env.example` with placeholders belongs in the repository. Rotate the Tapo password and the API key immediately if they were ever exposed.
+- Use a long random `HOMENEXUS_API_KEY` (`openssl rand -hex 32`). Anyone who knows it can add or change devices and trigger polling.
 - `/api/tapo` needs the API key and uses `POST` because it writes data. The Tapo password reaches the Python script through its environment, never as a command-line argument.
-- `/api/history` and `/api/devices` have no authentication and expose device names, local IPs and energy data. Keep the app inside your LAN.
+- `POST` and `PATCH` on `/api/devices` need the API key, which the dashboard keeps in the browser's local storage. `GET /api/history` and `GET /api/devices` have no authentication and expose device names, local IPs and energy data. Keep the app inside your LAN.
+- The API key is stored in plain text in the browser's local storage on each device where you enter it. Only enter it on devices you trust.
+- The Docker container runs as the unprivileged user `node`, not as root.
 - Do not forward port 3000 on your router. On the Pi, allow it only from the LAN with a firewall.
 - For remote access use Tailscale or WireGuard. If a public domain is unavoidable, put a reverse proxy with HTTPS and authentication in front.
 
 ## Continuous integration
 
-GitHub Actions runs `npm ci`, `npm run lint`, a high-severity `npm audit` (informational) and `npm run build` on every push and pull request to `main`.
+GitHub Actions runs `npm ci`, `npm run lint`, `npm audit --omit=dev --audit-level=high` and `npm run build` on every push and pull request to `main`. The audit covers production dependencies and fails the build on high-severity findings. The workflow only has read access to the repository and uses no secrets.
 
 ## Troubleshooting
 
 - **Empty chart or no readings**: check that at least one device exists and read the poller logs with `docker compose logs poller`.
 - **`Zugangsdaten fehlen`**: `TAPO_EMAIL` or `TAPO_PASSWORD` is missing in `.env`.
 - **`401 Nicht autorisiert`**: the poller and the app must share the same `HOMENEXUS_API_KEY`; recreate both containers after changing `.env`.
+- **`API-Key fehlt oder ist falsch`**: enter the same `HOMENEXUS_API_KEY` as in `.env` in the settings dialog (gear button) of the browser you use.
+- **`readonly database` or the app cannot write**: `./db-data` must be writable for uid 1000, see the Docker quick start.
 - **Dashboard shows old styles after an update**: hard-refresh the browser.
 - **Plug not reachable**: give the plug a fixed IP in your router and make sure the host is in the same network.
