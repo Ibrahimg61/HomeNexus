@@ -190,6 +190,10 @@ docker-compose.yml           App and poller services
 - Do not forward port 3000 on your router. On the Pi, allow it only from the LAN with a firewall.
 - For remote access use Tailscale or WireGuard. If a public domain is unavoidable, put a reverse proxy with HTTPS and authentication in front.
 
+## License
+
+HomeNexus is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may use it for personal and other noncommercial purposes, including changes and new works based on it. Commercial use, including selling it or offering it as a service, is not allowed. If you share the code or a modified version, you must include the license text and the `Required Notice` line from the [LICENSE](LICENSE) file, which credits the original author.
+
 ## Continuous integration
 
 GitHub Actions runs `npm ci`, `npm run lint`, `npm audit --omit=dev --audit-level=high` and `npm run build` on every push and pull request to `main`. The audit covers production dependencies and fails the build on high-severity findings. The workflow only has read access to the repository and uses no secrets.
